@@ -8,7 +8,9 @@
 - Save/load de pesos ✅
 - Tokenizador BPE entrenado ✅
 
-**Limitación actual**: `main.py` entrena en full-batch sobre 4 textos de ejemplo. No es realista.
+**Nota importante**: `main.py` está diseñado como **demo didáctica**.
+Entrena en full-batch sobre 4 textos para validar que el pipeline funciona end-to-end.
+Para entrenamiento con dataset real, usa `colab_training.py` (mini-batches + train/val + checkpoints).
 
 ---
 

@@ -1,7 +1,9 @@
 """
 main.py
 -------
-Pipeline completo del transformer desde cero.
+Demo completa del transformer desde cero.
+Usa un dataset minimo para validar end-to-end.
+Para entrenamiento real de dataset, usar colab_training.py.
 """
 
 import numpy as np

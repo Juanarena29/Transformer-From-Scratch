@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 print("[1/6] Instalando dependencias...")
-os.system("pip install -q datasets transformers")
+os.system("pip install -q datasets transformers scikit-learn matplotlib")
 
 # ── Importar módulos locales ─────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ DATASET_SIZE = "small"  # "small" (10K), "medium" (100K), "large" (500K)
 EPOCHS = 3
 BATCH_SIZE = 16 if DATASET_SIZE == "small" else (32 if DATASET_SIZE == "medium" else 64)
 LR = 0.001 if DATASET_SIZE == "small" else (0.0005 if DATASET_SIZE == "medium" else 0.0003)
-EVAL_EVERY = 100
+EVAL_EVERY = 100  # solo aplica si hay suficientes batches por época
 SAVE_EVERY = 500
 
 print(f"[CONFIG] dataset={DATASET_SIZE} | epochs={EPOCHS} | batch={BATCH_SIZE} | lr={LR}")
@@ -84,7 +84,15 @@ size_map = {"small": 10000, "medium": 100000, "large": 500000}
 split_str = f"train[:{size_map[DATASET_SIZE]}]"
 
 try:
-    dataset = load_dataset("wikipedia", "20231101.es", split=split_str, trust_remote_code=True)
+    # Hugging Face `datasets` ya no soporta scripts legacy como `wikipedia.py`.
+    # La forma estable es cargar los shards Parquet publicados en el Hub.
+    #
+    # Referencia: dataset `wikimedia/wikipedia` con subset `20231101.es`.
+    dataset = load_dataset(
+        "parquet",
+        data_files="hf://datasets/wikimedia/wikipedia/20231101.es/*.parquet",
+        split=split_str,
+    )
     print(f"[OK] Dataset cargado: {len(dataset)} documentos")
 except Exception as e:
     print(f"[WARN] No se pudo descargar Wikipedia: {e}")
@@ -219,6 +227,8 @@ for epoch in range(1, EPOCHS + 1):
     print(f"{'='*60}")
 
     epoch_losses = []
+    num_batches = max(1, int(np.ceil(len(train_texts) / BATCH_SIZE)))
+    eval_every = min(EVAL_EVERY, max(1, num_batches))
 
     for batch_idx, batch_texts in enumerate(batch_iterator(train_texts, BATCH_SIZE)):
         try:
@@ -235,7 +245,7 @@ for epoch in range(1, EPOCHS + 1):
             global_batch += 1
 
             # ── Logging ──────────────────────────────────────────────
-            if (batch_idx + 1) % EVAL_EVERY == 0:
+            if (batch_idx + 1) % eval_every == 0:
                 val_loss = eval_on_val(
                     model, loss_fn, val_texts, tokenizer, max_batches=5
                 )
@@ -243,7 +253,7 @@ for epoch in range(1, EPOCHS + 1):
                 val_ppl = float(np.exp(np.clip(val_loss, 0, 20)))
                 log_step(epoch, global_batch, loss, val_loss)
                 print(
-                    f"[batch {batch_idx+1:04d}] "
+                    f"[batch {batch_idx+1:04d}/{num_batches:04d}] "
                     f"train_loss={loss:.4f} (ppl={ppl:.1f}) | "
                     f"val_loss={val_loss:.4f} (ppl={val_ppl:.1f})"
                 )
@@ -261,6 +271,22 @@ for epoch in range(1, EPOCHS + 1):
     # ── Fin de época ─────────────────────────────────────────────────
     avg_loss = float(np.mean(epoch_losses))
     print(f"\n[EPOCH {epoch}] Promedio loss: {avg_loss:.4f}")
+
+    # Log final de época (para que SIEMPRE haya filas en training_log.csv)
+    try:
+        train_tail_loss = float(epoch_losses[-1])
+        val_loss_epoch = eval_on_val(
+            model, loss_fn, val_texts, tokenizer, max_batches=5
+        )
+        val_ppl_epoch = float(np.exp(np.clip(val_loss_epoch, 0, 20)))
+        train_ppl_epoch = float(np.exp(np.clip(train_tail_loss, 0, 20)))
+        log_step(epoch, global_batch, train_tail_loss, val_loss_epoch)
+        print(
+            f"[epoch_end] train_tail_loss={train_tail_loss:.4f} (ppl={train_ppl_epoch:.1f}) | "
+            f"val_loss={val_loss_epoch:.4f} (ppl={val_ppl_epoch:.1f})"
+        )
+    except Exception as e:
+        print(f"[WARN] No se pudo loguear fin de época: {e}")
 
     # ── Guardar checkpoint de época ──────────────────────────────────
     epoch_ckpt = f"{CHECKPOINT_DIR}/epoch_{epoch}_final.npz"
