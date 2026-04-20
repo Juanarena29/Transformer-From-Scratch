@@ -67,8 +67,13 @@ LR = 0.001 if DATASET_SIZE == "small" else (0.0005 if DATASET_SIZE == "medium" e
 EVAL_EVERY = 100  # solo aplica si hay suficientes batches por época
 SAVE_EVERY = 500
 
+# Wikipedia larga genera MUCHISIMOS chunks. Para demos/Colab, conviene topar.
+# Si pones None, no se submuestrea (puede volverse muy lento en NumPy).
+MAX_TRAIN_CHUNKS = 20000
+MAX_VAL_CHUNKS = 5000
 print(f"[CONFIG] dataset={DATASET_SIZE} | epochs={EPOCHS} | batch={BATCH_SIZE} | lr={LR}")
 print(f"[CONFIG] device={DEVICE}")
+print(f"[CONFIG] max_train_chunks={MAX_TRAIN_CHUNKS} | max_val_chunks={MAX_VAL_CHUNKS}")
 
 # ── Crear carpetas ───────────────────────────────────────────────────────────
 
@@ -145,7 +150,13 @@ tokenizer = BPETokenizer.load("Tokenizer/vocab/tokenizer.json")
 
 # Wikipedia trae articulos muy largos. Debemos partir cada documento en chunks
 # de tokens que, luego de agregar <BOS>/<EOS>, no superen cfg.max_seq_len.
-MAX_CONTENT_TOKENS = max(8, cfg.max_seq_len - 2)
+#
+# IMPORTANTE:
+# Guardamos cada chunk como *texto* (`decode(ids)`), pero en training volvemos a
+# tokenizar ese texto (`encode`). Ese round-trip puede cambiar levemente el largo.
+# Por eso usamos un margen de seguridad (-3) para que casi siempre:
+#   2 + len(encode(chunk)) <= max_seq_len
+MAX_CONTENT_TOKENS = max(8, cfg.max_seq_len - 3)
 STRIDE_CONTENT_TOKENS = max(MAX_CONTENT_TOKENS // 2, 1)
 
 
@@ -154,6 +165,7 @@ def chunk_wikipedia_documents(
     texts: list[str],
     max_content_tokens: int,
     stride_tokens: int,
+    max_seq_len: int,
     max_chunks: int | None = None,
 ) -> list[str]:
     """
@@ -169,6 +181,34 @@ def chunk_wikipedia_documents(
     chunked_texts: list[str] = []
     skipped_empty = 0
 
+    hard_limit = max_seq_len - 2  # lugar para <BOS> y <EOS>
+
+    def _finalize_chunk(raw_ids: list[int]) -> str | None:
+        """
+        ids -> texto -> ids, garantizando len(ids) <= hard_limit.
+        Si el round-trip crece, recorta desde el final (conservativo y simple).
+        """
+        if not raw_ids:
+            return None
+
+        ids_tail = raw_ids[-hard_limit:] if len(raw_ids) > hard_limit else raw_ids
+
+        text_chunk = tokenizer.decode(ids_tail).strip()
+        if not text_chunk:
+            return None
+
+        chk = tokenizer.encode(text_chunk)
+        if len(chk) > hard_limit:
+            chk = chk[:hard_limit]
+            text_chunk = tokenizer.decode(chk).strip()
+
+        chk2 = tokenizer.encode(text_chunk)
+        if len(chk2) > hard_limit:
+            chk2 = chk2[:hard_limit]
+            text_chunk = tokenizer.decode(chk2).strip()
+
+        return text_chunk or None
+
     for doc_idx, doc in enumerate(texts):
         if not isinstance(doc, str):
             doc = str(doc)
@@ -180,7 +220,7 @@ def chunk_wikipedia_documents(
 
         # Si entra completo y es corto, no fragmentamos.
         if len(ids) <= max_content_tokens:
-            text_chunk = tokenizer.decode(ids).strip()
+            text_chunk = _finalize_chunk(ids)
             if text_chunk:
                 chunked_texts.append(text_chunk)
                 if max_chunks is not None and len(chunked_texts) >= max_chunks:
@@ -193,7 +233,7 @@ def chunk_wikipedia_documents(
             if len(window) < max(16, max_content_tokens // 4):
                 continue
 
-            text_chunk = tokenizer.decode(window).strip()
+            text_chunk = _finalize_chunk(window)
             if text_chunk:
                 chunked_texts.append(text_chunk)
 
@@ -219,6 +259,8 @@ train_texts = chunk_wikipedia_documents(
     train_docs,
     MAX_CONTENT_TOKENS,
     STRIDE_CONTENT_TOKENS,
+    cfg.max_seq_len,
+    max_chunks=MAX_TRAIN_CHUNKS,
 )
 
 val_texts = chunk_wikipedia_documents(
@@ -226,9 +268,12 @@ val_texts = chunk_wikipedia_documents(
     val_docs,
     MAX_CONTENT_TOKENS,
     STRIDE_CONTENT_TOKENS,
+    cfg.max_seq_len,
+    max_chunks=MAX_VAL_CHUNKS,
 )
 
-print(f"[OK] Ejemplos LM train: {len(train_texts)} | Ejemplos LM val: {len(val_texts)}")
+print(f"[OK] Ejemplos LM train (cap early-stop): {len(train_texts)} | "
+      f"Ejemplos LM val (cap early-stop): {len(val_texts)}")
 
 
 model = Transformer(
