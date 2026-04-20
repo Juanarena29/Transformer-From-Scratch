@@ -81,19 +81,25 @@ print("\n[3/6] Descargando dataset Wikipedia español...")
 from datasets import load_dataset
 
 size_map = {"small": 10000, "medium": 100000, "large": 500000}
-split_str = f"train[:{size_map[DATASET_SIZE]}]"
+target_n = size_map[DATASET_SIZE]
 
 try:
     # Hugging Face `datasets` ya no soporta scripts legacy como `wikipedia.py`.
     # La forma estable es cargar los shards Parquet publicados en el Hub.
     #
     # Referencia: dataset `wikimedia/wikipedia` con subset `20231101.es`.
-    dataset = load_dataset(
+    # Importante:
+    # Usar split="train[:N]" puede terminar construyendo/leyendo casi todo el split
+    # antes de aplicar el slice (caro en tiempo/disco).
+    # Streaming + take(N) suele ser mucho mas eficiente para prototipos.
+    stream = load_dataset(
         "parquet",
         data_files="hf://datasets/wikimedia/wikipedia/20231101.es/*.parquet",
-        split=split_str,
+        split="train",
+        streaming=True,
     )
-    print(f"[OK] Dataset cargado: {len(dataset)} documentos")
+    dataset = list(stream.take(target_n))
+    print(f"[OK] Dataset cargado: {len(dataset)} documentos (streaming.take)")
 except Exception as e:
     print(f"[WARN] No se pudo descargar Wikipedia: {e}")
     print("       Usando corpus de ejemplo local...")
@@ -108,12 +114,10 @@ except Exception as e:
 
 # ── Train / Val split ────────────────────────────────────────────────────────
 
-print("\n[4/6] Preparando dataset: 80% train / 20% val...")
+print("\n[4/6] Extrayendo texto plano del dataset (un registro = un documento)...")
 from sklearn.model_selection import train_test_split
 
 all_texts = [doc["text"] if isinstance(doc, dict) else str(doc) for doc in dataset]
-train_texts, val_texts = train_test_split(all_texts, test_size=0.2, random_state=42)
-print(f"[OK] Train: {len(train_texts)} | Val: {len(val_texts)}")
 
 # ── Inicializar modelo ───────────────────────────────────────────────────────
 
@@ -138,6 +142,95 @@ else:
     cfg.d_ff = 1024
 
 tokenizer = BPETokenizer.load("Tokenizer/vocab/tokenizer.json")
+
+# Wikipedia trae articulos muy largos. Debemos partir cada documento en chunks
+# de tokens que, luego de agregar <BOS>/<EOS>, no superen cfg.max_seq_len.
+MAX_CONTENT_TOKENS = max(8, cfg.max_seq_len - 2)
+STRIDE_CONTENT_TOKENS = max(MAX_CONTENT_TOKENS // 2, 1)
+
+
+def chunk_wikipedia_documents(
+    tokenizer: BPETokenizer,
+    texts: list[str],
+    max_content_tokens: int,
+    stride_tokens: int,
+    max_chunks: int | None = None,
+) -> list[str]:
+    """
+    Convierte articulos largos en muchos ejemplos cortos de LM.
+
+    Estrategia:
+      encode(doc) -> ids largos -> ventanas con stride (solapadas) sobre ids.
+
+    Por que ids y no texto crudo:
+      cortar texto UTF-8 al azar puede romper palabras; cortar sobre tokens del
+      mismo tokenizador garantiza chunks consistentes.
+    """
+    chunked_texts: list[str] = []
+    skipped_empty = 0
+
+    for doc_idx, doc in enumerate(texts):
+        if not isinstance(doc, str):
+            doc = str(doc)
+
+        ids = tokenizer.encode(doc)
+        if len(ids) == 0:
+            skipped_empty += 1
+            continue
+
+        # Si entra completo y es corto, no fragmentamos.
+        if len(ids) <= max_content_tokens:
+            text_chunk = tokenizer.decode(ids).strip()
+            if text_chunk:
+                chunked_texts.append(text_chunk)
+                if max_chunks is not None and len(chunked_texts) >= max_chunks:
+                    break
+            continue
+
+        step = stride_tokens if stride_tokens > 0 else max_content_tokens
+        for start in range(0, len(ids), step):
+            window = ids[start : start + max_content_tokens]
+            if len(window) < max(16, max_content_tokens // 4):
+                continue
+
+            text_chunk = tokenizer.decode(window).strip()
+            if text_chunk:
+                chunked_texts.append(text_chunk)
+
+            if max_chunks is not None and len(chunked_texts) >= max_chunks:
+                break
+
+        if max_chunks is not None and len(chunked_texts) >= max_chunks:
+            break
+
+    print(
+        f"[DATA] Docs originales: {len(texts)} | "
+        f"Ejemplos chunkados: {len(chunked_texts)} | "
+        f"Vacios omitidos: {skipped_empty}"
+    )
+    return chunked_texts
+
+
+train_docs, val_docs = train_test_split(all_texts, test_size=0.2, random_state=42)
+print(f"[OK] Docs train: {len(train_docs)} | Docs val: {len(val_docs)}")
+
+train_texts = chunk_wikipedia_documents(
+    tokenizer,
+    train_docs,
+    MAX_CONTENT_TOKENS,
+    STRIDE_CONTENT_TOKENS,
+)
+
+val_texts = chunk_wikipedia_documents(
+    tokenizer,
+    val_docs,
+    MAX_CONTENT_TOKENS,
+    STRIDE_CONTENT_TOKENS,
+)
+
+print(f"[OK] Ejemplos LM train: {len(train_texts)} | Ejemplos LM val: {len(val_texts)}")
+
+
 model = Transformer(
     vocab_size=cfg.vocab_size,
     d_model=cfg.d_model,
