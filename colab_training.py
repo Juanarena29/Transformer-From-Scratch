@@ -47,14 +47,14 @@ LOG_FILE = "training_log.csv"
 
 # Hiperparámetros
 DATASET_SIZE = "small"  # "small" (10K), "medium" (100K), "large" (500K)
-EPOCHS = 3
+EPOCHS = 2
 BATCH_SIZE = 16 if DATASET_SIZE == "small" else (32 if DATASET_SIZE == "medium" else 64)
-LR = 0.001 if DATASET_SIZE == "small" else (0.0005 if DATASET_SIZE == "medium" else 0.0003)
-EVAL_EVERY = 100  # solo aplica si hay suficientes batches por época
-SAVE_EVERY = 500
+LR = TransformerConfig.lr
+EVAL_EVERY = 50  # solo aplica si hay suficientes batches por época
+SAVE_EVERY = 250
 RESUME_FROM_CHECKPOINT = True
 RESUME_PATH = None  # e.g. "checkpoints/epoch_3_final.npz"
-DATASET_SHUFFLE_SEED = None  # None => seed aleatorio en cada rerun
+DATASET_SHUFFLE_SEED = 42  # None => seed aleatorio en cada rerun
 
 # Wikipedia larga genera MUCHISIMOS chunks. Para demos/Colab, conviene topar.
 # Si pones None, no se submuestrea (puede volverse muy lento en NumPy).
@@ -127,23 +127,11 @@ all_texts = [doc["text"] if isinstance(doc, dict) else str(doc) for doc in datas
 
 print("\n[5/6] Inicializando modelo...")
 cfg = TransformerConfig()
-
-# Ajustar config según dataset
-if DATASET_SIZE == "small":
-    cfg.n_layers = 2
-    cfg.d_model = 64
-    cfg.n_heads = 4
-    cfg.d_ff = 256
-elif DATASET_SIZE == "medium":
-    cfg.n_layers = 4
-    cfg.d_model = 128
-    cfg.n_heads = 8
-    cfg.d_ff = 512
-else:
-    cfg.n_layers = 6
-    cfg.d_model = 256
-    cfg.n_heads = 8
-    cfg.d_ff = 1024
+print(
+    "[CONFIG] arquitectura (desde Config.py) -> "
+    f"vocab={cfg.vocab_size}, d_model={cfg.d_model}, n_heads={cfg.n_heads}, "
+    f"n_layers={cfg.n_layers}, d_ff={cfg.d_ff}, max_seq_len={cfg.max_seq_len}"
+)
 
 tokenizer = BPETokenizer.load("Tokenizer/vocab/tokenizer.json")
 
