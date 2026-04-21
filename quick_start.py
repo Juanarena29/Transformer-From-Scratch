@@ -1,11 +1,7 @@
-"""
-quick_start.py
---------------
-Script de verificacion rapida: confirma que todos los modulos
-y dependencias estan listos antes de entrenar.
-
-Ejecutar en Colab como primera linea:
-    %run quick_start.py
+"""quick_start.py
+Quick environment and integration verification script.
+Architecture position: executed before training to validate runtime
+dependencies, tokenizer loading, and model forward/backward/update paths.
 """
 
 import os

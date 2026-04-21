@@ -1,12 +1,7 @@
-"""
-layer_norm.py
--------------
-Layer Normalization para un transformer desde cero.
-
-Posición en la arquitectura:
-
-    x + MultiHeadAttention(x)  →  LayerNorm  →  siguiente capa
-    x + FeedForward(x)         →  LayerNorm  →  siguiente capa
+"""layer_norm.py
+Layer normalization layer for residual sublayers.
+Architecture position: applied after residual additions in both attention and
+feed-forward sublayers inside each encoder block.
 """
 
 import numpy as np
@@ -31,7 +26,7 @@ class LayerNorm:
         self.eps = eps
 
         # Parámetros aprendibles
-        self.gamma = np.ones(d_model)   # (128,)
+        self.gamma = np.ones(d_model)  # (128,)
         self.beta = np.zeros(d_model)  # (128,)
 
         # Gradientes
@@ -107,7 +102,18 @@ class LayerNorm:
     # ------------------------------------------------------------------
 
     def update(self, lr: float) -> None:
-        """SGD sobre gamma y beta."""
+        """Apply one SGD step to normalization parameters.
+
+        Parameters
+        ----------
+        lr : float
+            Learning rate.
+
+        Returns
+        -------
+        None
+            Parameters are updated in place.
+        """
         self.gamma -= lr * self._dgamma
         self.beta -= lr * self._dbeta
 

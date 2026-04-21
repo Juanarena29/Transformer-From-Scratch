@@ -1,7 +1,7 @@
-"""
-loss.py
--------
-Funciones de pérdida para entrenar el transformer.
+"""loss.py
+Loss functions used for language-model optimization.
+Architecture position: consumes transformer logits and supervision targets to
+produce scalar loss and gradients for backpropagation.
 """
 
 import numpy as np
@@ -17,14 +17,37 @@ class CrossEntropyLoss:
     """
 
     def __init__(self, ignore_index: int | None = None, eps: float = 1e-12) -> None:
+        """Initialize cross-entropy loss configuration.
+
+        Parameters
+        ----------
+        ignore_index : int | None, optional
+            Target token ID ignored in loss averaging and gradients.
+        eps : float, optional
+            Numerical floor for probabilities before ``log``.
+
+        Returns
+        -------
+        None
+            Stores configuration attributes.
+        """
         self.ignore_index = ignore_index
         self.eps = eps
 
     def forward(self, logits: np.ndarray, targets: np.ndarray) -> tuple[float, np.ndarray]:
-        """
-        Retorna:
-          - loss escalar promedio sobre tokens válidos
-          - dlogits con mismo shape que logits
+        """Compute cross-entropy loss and gradient with respect to logits.
+
+        Parameters
+        ----------
+        logits : np.ndarray
+            Model logits with shape ``(batch, seq, vocab_size)``.
+        targets : np.ndarray
+            Target token IDs with shape ``(batch, seq)``.
+
+        Returns
+        -------
+        tuple[float, np.ndarray]
+            Scalar mean loss and ``dlogits`` with same shape as ``logits``.
         """
         if logits.ndim != 3:
             raise ValueError(f"logits debe tener 3 dims (B,T,V), recibido {logits.shape}")

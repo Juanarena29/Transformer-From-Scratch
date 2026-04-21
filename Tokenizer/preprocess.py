@@ -1,7 +1,7 @@
-"""
-Pipeline de preprocesamiento del corpus para el tokenizador BPE.
-Lee el corpus crudo, extrae y filtra frecuencias de palabras, y las persiste en JSON,
-desacoplando esta etapa del entrenamiento BPE.
+"""preprocess.py
+Corpus preprocessing pipeline for BPE tokenizer training data.
+Architecture position: runs before tokenizer training and outputs serialized
+word-frequency statistics consumed by `Tokenizer/tokenizer.py`.
 """
 import re
 import os

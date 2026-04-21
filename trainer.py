@@ -1,7 +1,7 @@
-"""
-trainer.py
-----------
-Utilidades de entrenamiento para el mini transformer.
+"""trainer.py
+Training utilities for language-model batches and optimization loops.
+Architecture position: orchestrates data batching around model forward,
+backward, and parameter update passes.
 """
 
 import numpy as np
@@ -9,6 +9,20 @@ from loss import CrossEntropyLoss
 
 
 def _pad_sequences(sequences: list[list[int]], pad_id: int) -> np.ndarray:
+    """Pad variable-length token ID sequences to a rectangular array.
+
+    Parameters
+    ----------
+    sequences : list[list[int]]
+        Token ID sequences.
+    pad_id : int
+        Padding token ID used to fill shorter sequences.
+
+    Returns
+    -------
+    np.ndarray
+        Padded matrix with shape ``(batch, max_seq_len)``.
+    """
     max_len = max(len(seq) for seq in sequences)
     padded = [seq + [pad_id] * (max_len - len(seq)) for seq in sequences]
     return np.array(padded, dtype=int)
@@ -21,13 +35,25 @@ def build_lm_batch(
     bos_id: int = 2,
     eos_id: int = 3,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Construye un batch para objetivo next-token prediction.
+    """Build a next-token prediction batch from text samples.
 
-    Para cada texto:
-      tokens = [BOS] + encode(text) + [EOS]
-      x = tokens[:-1]
-      y = tokens[1:]
+    Parameters
+    ----------
+    tokenizer : Any
+        Tokenizer object exposing ``encode``.
+    texts : list[str]
+        Input text samples.
+    pad_id : int, optional
+        Padding token ID.
+    bos_id : int, optional
+        Begin-of-sequence token ID.
+    eos_id : int, optional
+        End-of-sequence token ID.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        ``x_batch`` and ``y_batch`` with aligned LM supervision.
     """
     tokenized = []
     for text in texts:
@@ -51,7 +77,26 @@ def train_step(
     y_batch: np.ndarray,
     lr: float,
 ) -> float:
-    """Un paso completo: forward -> loss -> backward -> update."""
+    """Run one full optimization step.
+
+    Parameters
+    ----------
+    model : Any
+        Transformer-like model with ``forward``, ``backward``, and ``update``.
+    loss_fn : CrossEntropyLoss
+        Loss object.
+    x_batch : np.ndarray
+        Input token IDs with shape ``(batch, seq)``.
+    y_batch : np.ndarray
+        Target token IDs with shape ``(batch, seq)``.
+    lr : float
+        Learning rate.
+
+    Returns
+    -------
+    float
+        Scalar training loss for the step.
+    """
     logits = model.forward(x_batch)
     loss, dlogits = loss_fn.forward(logits, y_batch)
     model.backward(dlogits)
@@ -70,11 +115,33 @@ def train_loop(
     eos_id: int = 3,
     verbose: bool = True,
 ) -> dict[str, list[float]]:
-    """
-    Entrena en full-batch sobre `texts` por varias épocas.
+    """Train a model for multiple epochs on in-memory text samples.
 
-    Retorna historial:
-      {"loss": [...], "perplexity": [...]}
+    Parameters
+    ----------
+    model : Any
+        Transformer-like model.
+    tokenizer : Any
+        Tokenizer object exposing ``encode``.
+    texts : list[str]
+        Training corpus samples.
+    epochs : int
+        Number of epochs.
+    lr : float
+        Learning rate.
+    pad_id : int, optional
+        Padding token ID.
+    bos_id : int, optional
+        Begin-of-sequence token ID.
+    eos_id : int, optional
+        End-of-sequence token ID.
+    verbose : bool, optional
+        Whether to print per-epoch metrics.
+
+    Returns
+    -------
+    dict[str, list[float]]
+        History dictionary with ``loss`` and ``perplexity`` lists.
     """
     x_batch, y_batch = build_lm_batch(
         tokenizer, texts=texts, pad_id=pad_id, bos_id=bos_id, eos_id=eos_id

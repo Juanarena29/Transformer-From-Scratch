@@ -1,22 +1,25 @@
-"""
-multi_head_attention.py
------------------------
-Multi-Head Attention para un transformer desde cero.
-
-Posición en la arquitectura:
-
-    [Positional Encoding]  →  x: shape (batch, seq, d_model)
-          ↓
-    [MultiHeadAttention]   →  x: shape (batch, seq, d_model)
-          ↓
-    [Feed Forward]
+"""multi_head_attention.py
+Multi-head self-attention implementation in NumPy.
+Architecture position: receives encoded token representations and outputs
+contextualized representations before the FFN sublayer.
 """
 
 import numpy as np
 
 
 def softmax(x: np.ndarray) -> np.ndarray:
-    """Softmax numéricamente estable sobre el último eje."""
+    """Compute numerically stable softmax over the last axis.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input tensor of unnormalized scores.
+
+    Returns
+    -------
+    np.ndarray
+        Probability tensor with the same shape as ``x``.
+    """
     x = x - x.max(axis=-1, keepdims=True)
     e = np.exp(x)
     return e / e.sum(axis=-1, keepdims=True)
@@ -219,7 +222,18 @@ class MultiHeadAttention:
     # ------------------------------------------------------------------
 
     def update(self, lr: float) -> None:
-        """SGD sobre los 4 matrices de pesos."""
+        """Apply one SGD step to attention projection matrices.
+
+        Parameters
+        ----------
+        lr : float
+            Learning rate.
+
+        Returns
+        -------
+        None
+            Parameters are updated in place.
+        """
         self.W_Q -= lr * self._dW_Q
         self.W_K -= lr * self._dW_K
         self.W_V -= lr * self._dW_V

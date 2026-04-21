@@ -1,3 +1,9 @@
+"""main.py
+Streamlit interface to inspect BPE tokenization behavior.
+Architecture position: optional analysis tool used after tokenizer training and
+before or during model experiments.
+"""
+
 import streamlit as st
 from collections import Counter
 from tokenizer import BPETokenizer
@@ -5,11 +11,36 @@ from tokenizer import BPETokenizer
 
 @st.cache_resource
 def load_tokenizer():
+    """Load and cache the trained tokenizer instance.
+
+    Parameters
+    ----------
+    None
+        Uses the default tokenizer JSON path.
+
+    Returns
+    -------
+    BPETokenizer
+        Loaded tokenizer object.
+    """
     return BPETokenizer.load("vocab/tokenizer.json")
 
 
 def tokenize_word_traced(tokenizer, word: str):
-    """Runs _tokenize_word and records every merge that was applied."""
+    """Tokenize one word while recording merge operations.
+
+    Parameters
+    ----------
+    tokenizer : BPETokenizer
+        Trained tokenizer instance.
+    word : str
+        Input word.
+
+    Returns
+    -------
+    tuple[list[str], list[tuple[str, str, str]]]
+        Final symbols and applied merges as ``(left, right, merged)`` tuples.
+    """
     symbols = list(tokenizer._word_to_symbols(word))
     applied = []
 
@@ -45,6 +76,20 @@ def tokenize_word_traced(tokenizer, word: str):
 
 
 def get_pair_frequencies(tokenizer, words: list[str]) -> list[tuple]:
+    """Compute top character-level pair frequencies over input words.
+
+    Parameters
+    ----------
+    tokenizer : BPETokenizer
+        Trained tokenizer instance.
+    words : list[str]
+        Input words.
+
+    Returns
+    -------
+    list[tuple]
+        Top-10 pair-frequency tuples sorted by frequency.
+    """
     pair_counts: Counter = Counter()
     for word in words:
         symbols = list(tokenizer._word_to_symbols(word))
@@ -55,6 +100,20 @@ def get_pair_frequencies(tokenizer, words: list[str]) -> list[tuple]:
 
 @st.cache_data
 def get_top_vocab(_tokenizer, n: int = 30) -> list[tuple[str, int]]:
+    """Return top learned non-special tokens by merge rank.
+
+    Parameters
+    ----------
+    _tokenizer : BPETokenizer
+        Trained tokenizer instance.
+    n : int, optional
+        Number of tokens to return.
+
+    Returns
+    -------
+    list[tuple[str, int]]
+        Token and rank pairs.
+    """
     # Los tokens aprendidos primero tienen rank más bajo → más frecuentes en el corpus.
     merge_rank = {a + b: rank for rank, (a, b) in enumerate(_tokenizer.merges)}
     non_special = [t for t in _tokenizer.vocab if not t.startswith("<")]

@@ -1,23 +1,7 @@
-"""
-transformer.py
---------------
-Transformer completo ensamblado desde cero.
-
-Arquitectura completa:
-
-    [texto]
-       ↓
-    [BPE Tokenizer]
-       ↓
-    [TokenEmbedding]
-       ↓
-    [PositionalEncoding]
-       ↓
-    [EncoderBlock x4]
-       ↓
-    [LM Head]  →  logits: (batch, seq, vocab_size)
-       ↓
-    [Softmax]  →  probabilidades sobre el vocabulario
+"""transformer.py
+End-to-end Transformer language model assembled from local modules.
+Architecture position: central model between tokenization/data batching and
+loss/inference sampling logic.
 """
 
 import numpy as np
@@ -156,7 +140,18 @@ class Transformer:
     # ------------------------------------------------------------------
 
     def update(self, lr: float) -> None:
-        """SGD sobre todos los parámetros del transformer."""
+        """Apply one SGD step across all learnable model parameters.
+
+        Parameters
+        ----------
+        lr : float
+            Learning rate.
+
+        Returns
+        -------
+        None
+            Parameters are updated in place.
+        """
         self.embedding.update(lr)
         # pos_enc no tiene parámetros
 
@@ -171,7 +166,18 @@ class Transformer:
     # ------------------------------------------------------------------
 
     def state_dict(self) -> dict[str, np.ndarray]:
-        """Retorna todos los pesos aprendibles en un dict plano."""
+        """Collect all learnable parameters in a flat dictionary.
+
+        Parameters
+        ----------
+        None
+            Uses current model attributes.
+
+        Returns
+        -------
+        dict[str, np.ndarray]
+            Flat parameter mapping suitable for serialization.
+        """
         state = {
             "embedding.W": self.embedding.W,
             "head.W": self.W_head,
@@ -200,7 +206,18 @@ class Transformer:
         return state
 
     def load_state_dict(self, state: dict[str, np.ndarray]) -> None:
-        """Carga pesos desde un state_dict compatible."""
+        """Load model parameters from a compatible state dictionary.
+
+        Parameters
+        ----------
+        state : dict[str, np.ndarray]
+            Flat parameter mapping matching ``state_dict`` keys and shapes.
+
+        Returns
+        -------
+        None
+            Parameters are copied into model attributes.
+        """
         expected_keys = set(self.state_dict().keys())
         provided_keys = set(state.keys())
 
@@ -244,14 +261,36 @@ class Transformer:
             block.norm2.beta = _assign(block.norm2.beta, f"{prefix}.norm2.beta")
 
     def save_weights(self, path: str) -> None:
-        """Guarda los pesos del modelo en formato .npz."""
+        """Save model parameters to disk as a ``.npz`` file.
+
+        Parameters
+        ----------
+        path : str
+            Output file path.
+
+        Returns
+        -------
+        None
+            Writes file to disk.
+        """
         directory = os.path.dirname(path)
         if directory:
             os.makedirs(directory, exist_ok=True)
         np.savez(path, **self.state_dict())
 
     def load_weights(self, path: str) -> None:
-        """Carga pesos guardados con save_weights()."""
+        """Load model parameters from a previously saved ``.npz`` file.
+
+        Parameters
+        ----------
+        path : str
+            Input file path.
+
+        Returns
+        -------
+        None
+            Parameters are loaded into the model.
+        """
         with np.load(path, allow_pickle=False) as data:
             state = {k: data[k] for k in data.files}
         self.load_state_dict(state)
@@ -271,6 +310,18 @@ class Transformer:
         return total
 
     def __repr__(self) -> str:
+        """Return a human-readable summary string.
+
+        Parameters
+        ----------
+        None
+            Uses current model attributes.
+
+        Returns
+        -------
+        str
+            Model summary text.
+        """
         lines = ["Transformer("]
         lines.append(f"  {self.embedding}")
         lines.append(f"  {self.pos_enc}")

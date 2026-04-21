@@ -1,21 +1,7 @@
-"""
-colab_training.py
------------------
-Script de entrenamiento completo para Google Colab.
-
-Características:
-  - descarga Wikipedia español automáticamente
-  - mini-batching real
-  - train/val split
-  - checkpointing periódico
-  - logging a CSV
-  - plotting de métricas
-
-Instrucciones:
-  1. Abre https://colab.research.google.com
-  2. Copia este script en la primera celda
-  3. Ejecuta (Cell > Run All)
-  4. Monitorea en tiempo real los gráficos y logs
+"""colab_training.py
+Full training pipeline designed for Google Colab execution.
+Architecture position: orchestrates dataset loading, batching, model updates,
+evaluation, checkpointing, and metric visualization around the Transformer.
 """
 
 import os
@@ -66,6 +52,9 @@ BATCH_SIZE = 16 if DATASET_SIZE == "small" else (32 if DATASET_SIZE == "medium" 
 LR = 0.001 if DATASET_SIZE == "small" else (0.0005 if DATASET_SIZE == "medium" else 0.0003)
 EVAL_EVERY = 100  # solo aplica si hay suficientes batches por época
 SAVE_EVERY = 500
+RESUME_FROM_CHECKPOINT = True
+RESUME_PATH = None  # e.g. "checkpoints/epoch_3_final.npz"
+DATASET_SHUFFLE_SEED = None  # None => seed aleatorio en cada rerun
 
 # Wikipedia larga genera MUCHISIMOS chunks. Para demos/Colab, conviene topar.
 # Si pones None, no se submuestrea (puede volverse muy lento en NumPy).
@@ -74,6 +63,14 @@ MAX_VAL_CHUNKS = 5000
 print(f"[CONFIG] dataset={DATASET_SIZE} | epochs={EPOCHS} | batch={BATCH_SIZE} | lr={LR}")
 print(f"[CONFIG] device={DEVICE}")
 print(f"[CONFIG] max_train_chunks={MAX_TRAIN_CHUNKS} | max_val_chunks={MAX_VAL_CHUNKS}")
+
+if DATASET_SHUFFLE_SEED is None:
+    DATASET_SHUFFLE_SEED = int(np.random.default_rng().integers(0, 2**31 - 1))
+print(f"[CONFIG] dataset_shuffle_seed={DATASET_SHUFFLE_SEED}")
+# Resume training
+RESUME_FROM_CHECKPOINT = True
+RESUME_PATH = None  # e.g. "checkpoints/epoch_3_final.npz"
+
 
 # ── Crear carpetas ───────────────────────────────────────────────────────────
 
@@ -103,8 +100,10 @@ try:
         split="train",
         streaming=True,
     )
+    # Barajar el stream hace que cada rerun tome documentos distintos.
+    stream = stream.shuffle(seed=DATASET_SHUFFLE_SEED, buffer_size=50_000)
     dataset = list(stream.take(target_n))
-    print(f"[OK] Dataset cargado: {len(dataset)} documentos (streaming.take)")
+    print(f"[OK] Dataset cargado: {len(dataset)} documentos (streaming.shuffle + take)")
 except Exception as e:
     print(f"[WARN] No se pudo descargar Wikipedia: {e}")
     print("       Usando corpus de ejemplo local...")
@@ -251,7 +250,11 @@ def chunk_wikipedia_documents(
     return chunked_texts
 
 
-train_docs, val_docs = train_test_split(all_texts, test_size=0.2, random_state=42)
+train_docs, val_docs = train_test_split(
+    all_texts,
+    test_size=0.2,
+    random_state=DATASET_SHUFFLE_SEED,
+)
 print(f"[OK] Docs train: {len(train_docs)} | Docs val: {len(val_docs)}")
 
 train_texts = chunk_wikipedia_documents(
@@ -285,6 +288,36 @@ model = Transformer(
     max_seq_len=cfg.max_seq_len,
 )
 print(f"[OK] Modelo con {model.num_parameters:,} parámetros")
+
+# ── Resume opcional de checkpoint ───────────────────────────────────────────
+start_epoch = 1
+
+if RESUME_FROM_CHECKPOINT:
+    ckpt_to_load = RESUME_PATH
+
+    if ckpt_to_load is None:
+        candidates = []
+        for fn in os.listdir(CHECKPOINT_DIR):
+            if fn.startswith("epoch_") and fn.endswith("_final.npz"):
+                try:
+                    ep = int(fn.split("_")[1])
+                    candidates.append((ep, fn))
+                except Exception:
+                    pass
+
+        if candidates:
+            candidates.sort(key=lambda x: x[0])
+            last_ep, last_fn = candidates[-1]
+            ckpt_to_load = os.path.join(CHECKPOINT_DIR, last_fn)
+            start_epoch = last_ep + 1
+
+    if ckpt_to_load and os.path.exists(ckpt_to_load):
+        model.load_weights(ckpt_to_load)
+        print(f"[OK] Resume desde: {ckpt_to_load}")
+        print(f"[OK] Continuando desde epoch {start_epoch}")
+    else:
+        print("[INFO] No se encontro checkpoint para resume; entrenamiento desde cero.")
+
 
 # ── Data loader por mini-batches ─────────────────────────────────────────────
 
@@ -359,7 +392,7 @@ init_logger()
 
 global_batch = 0
 
-for epoch in range(1, EPOCHS + 1):
+for epoch in range(start_epoch, start_epoch + EPOCHS):
     print(f"\n{'='*60}")
     print(f"EPOCH {epoch}/{EPOCHS}")
     print(f"{'='*60}")

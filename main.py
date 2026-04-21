@@ -1,9 +1,7 @@
-"""
-main.py
--------
-Demo completa del transformer desde cero.
-Usa un dataset minimo para validar end-to-end.
-Para entrenamiento real de dataset, usar colab_training.py.
+"""main.py
+End-to-end smoke test and mini training demo.
+Architecture position: executable entrypoint that wires tokenizer, model,
+batching, training loop, and checkpoint persistence.
 """
 
 import numpy as np
@@ -14,6 +12,18 @@ from trainer import build_lm_batch, train_loop
 
 
 def build_model(cfg: TransformerConfig) -> Transformer:
+    """Instantiate a Transformer from configuration values.
+
+    Parameters
+    ----------
+    cfg : TransformerConfig
+        Hyperparameter container.
+
+    Returns
+    -------
+    Transformer
+        Initialized Transformer model.
+    """
     return Transformer(
         vocab_size=cfg.vocab_size,
         d_model=cfg.d_model,
@@ -25,6 +35,18 @@ def build_model(cfg: TransformerConfig) -> Transformer:
 
 
 def main() -> None:
+    """Run the local end-to-end demonstration workflow.
+
+    Parameters
+    ----------
+    None
+        Uses local files and default configuration.
+
+    Returns
+    -------
+    None
+        Prints checks and writes a checkpoint file.
+    """
     # ── Config ───────────────────────────────────────────────────────────
     cfg = TransformerConfig()
 

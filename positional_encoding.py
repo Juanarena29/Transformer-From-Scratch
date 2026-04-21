@@ -1,15 +1,6 @@
-"""
-positional_encoding.py
-----------------------
-Positional Encoding sinusoidal para un transformer desde cero.
-
-Posición en la arquitectura:
-
-    [TokenEmbedding]   →  embeddings: shape (batch_size, seq_len, d_model)
-          ↓
-    [PositionalEncoding] →  x: shape (batch_size, seq_len, d_model)
-          ↓
-    [Transformer blocks]
+"""positional_encoding.py
+Sinusoidal positional encoding matrix for token representations.
+Architecture position: applied after token embeddings and before encoder blocks.
 """
 
 import numpy as np
@@ -41,6 +32,18 @@ class PositionalEncoding:
         self.pe = self._build_matrix()  # (max_seq_len, d_model)
 
     def _build_matrix(self) -> np.ndarray:
+        """Build the fixed sinusoidal positional encoding matrix.
+
+        Parameters
+        ----------
+        None
+            Uses ``self.max_seq_len`` and ``self.d_model``.
+
+        Returns
+        -------
+        np.ndarray
+            Positional matrix with shape ``(max_seq_len, d_model)``.
+        """
         pe = np.zeros((self.max_seq_len, self.d_model))
 
         positions = np.arange(self.max_seq_len).reshape(-1, 1)   # (seq, 1)
@@ -88,6 +91,18 @@ class PositionalEncoding:
         return dout
 
     def __repr__(self) -> str:
+        """Return a compact string representation.
+
+        Parameters
+        ----------
+        None
+            Uses instance attributes only.
+
+        Returns
+        -------
+        str
+            Debug-friendly representation.
+        """
         return (
             f"PositionalEncoding("
             f"d_model={self.d_model}, "

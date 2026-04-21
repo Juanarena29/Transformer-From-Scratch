@@ -1,26 +1,7 @@
-"""
-encoder_block.py
-----------------
-Encoder Block completo para un transformer desde cero.
-
-Un bloque encoder es la unidad repetible del transformer.
-El transformer completo apila N de estos bloques en secuencia.
-
-Flujo interno:
-    x → MHA → Add & Norm → FFN → Add & Norm → salida
-
-Posición en la arquitectura:
-
-    [Positional Encoding]
-          ↓
-    [Encoder Block 1]
-          ↓
-    [Encoder Block 2]
-          ↓
-         ...
-    [Encoder Block N]  (N = n_layers = 4)
-          ↓
-    [Output / LM Head]
+"""encoder_block.py
+Encoder block composed of attention, residual paths, normalization, and FFN.
+Architecture position: repeated core unit between positional encoding and the
+language-model head projection.
 """
 
 import numpy as np
@@ -145,7 +126,18 @@ class EncoderBlock:
     # ------------------------------------------------------------------
 
     def update(self, lr: float) -> None:
-        """Actualiza todos los parámetros del bloque."""
+        """Apply one SGD step to all submodules in the block.
+
+        Parameters
+        ----------
+        lr : float
+            Learning rate.
+
+        Returns
+        -------
+        None
+            Submodule parameters are updated in place.
+        """
         self.attention.update(lr)
         self.norm1.update(lr)
         self.ff.update(lr)

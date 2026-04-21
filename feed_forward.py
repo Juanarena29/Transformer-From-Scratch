@@ -1,21 +1,41 @@
-"""
-feed_forward.py
----------------
-Feed Forward Network para un transformer desde cero.
-
-Posición en la arquitectura:
-
-    LayerNorm(x + Attention(x))  →  FeedForward  →  LayerNorm  →  salida
+"""feed_forward.py
+Feed-Forward Network block used inside each encoder block.
+Architecture position: runs after first residual+LayerNorm and before second
+residual+LayerNorm within an encoder block.
 """
 
 import numpy as np
 
 
 def relu(x: np.ndarray) -> np.ndarray:
+    """Apply ReLU activation elementwise.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input tensor.
+
+    Returns
+    -------
+    np.ndarray
+        ReLU-activated tensor with the same shape as ``x``.
+    """
     return np.maximum(0, x)
 
 
 def relu_deriv(x: np.ndarray) -> np.ndarray:
+    """Compute the derivative of ReLU activation.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Pre-activation tensor used by ReLU.
+
+    Returns
+    -------
+    np.ndarray
+        Tensor with 1.0 where ``x > 0`` and 0.0 elsewhere.
+    """
     return (x > 0).astype(float)
 
 
@@ -133,7 +153,18 @@ class FeedForward:
     # ------------------------------------------------------------------
 
     def update(self, lr: float) -> None:
-        """SGD sobre W1, b1, W2, b2."""
+        """Apply one SGD step to FFN parameters.
+
+        Parameters
+        ----------
+        lr : float
+            Learning rate.
+
+        Returns
+        -------
+        None
+            Parameters are updated in place.
+        """
         self.W1 -= lr * self._dW1
         self.W2 -= lr * self._dW2
         self.b1 -= lr * self._db1

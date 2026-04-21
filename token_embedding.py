@@ -1,19 +1,7 @@
-"""
-token_embedding.py
-------------------
-Módulo de Token Embedding para un transformer desde cero.
-
-Posición en la arquitectura:
-
-    [secuencia de texto]
-          ↓
-    [Tokenizador BPE]  →  token_ids : shape (batch_size, seq_len),  dtype int
-          ↓
-    [TokenEmbedding]   →  embeddings: shape (batch_size, seq_len, d_model), dtype float
-          ↓
-    [Positional Encoding]
-          ↓
-    [Transformer blocks]
+"""token_embedding.py
+Token embedding lookup layer backed by a learnable matrix.
+Architecture position: receives tokenizer IDs and produces dense vectors before
+positional encoding.
 """
 
 import numpy as np
@@ -97,10 +85,17 @@ class TokenEmbedding:
     # ------------------------------------------------------------------
 
     def update(self, lr: float) -> None:
-        """
-        Actualiza W con un paso de Stochastic Gradient Descent.
+        """Update embedding matrix with one SGD step.
 
-            W ← W - lr × ∂L/∂W
+        Parameters
+        ----------
+        lr : float
+            Learning rate.
+
+        Returns
+        -------
+        None
+            Embedding matrix is updated in place.
         """
         self.W -= lr * self._dW
 
@@ -109,6 +104,18 @@ class TokenEmbedding:
     # ------------------------------------------------------------------
 
     def __repr__(self) -> str:
+        """Return a compact string representation.
+
+        Parameters
+        ----------
+        None
+            Uses instance attributes only.
+
+        Returns
+        -------
+        str
+            Debug-friendly representation.
+        """
         n_params = self.vocab_size * self.d_model
         return (
             f"TokenEmbedding("

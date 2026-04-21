@@ -1,12 +1,7 @@
-"""
-inference.py
--------------
-Generación de texto con el transformer entrenado.
-
-Métodos soportados:
-  - Greedy: selecciona el token más probable
-  - Top-K: muestrea entre los K tokens más probables
-  - Top-p (nucleus): muestrea entre tokens cuya prob acumulada < p
+"""inference.py
+Autoregressive text generation utilities for a trained Transformer.
+Architecture position: runs after training/checkpointing and consumes the
+tokenizer plus saved model weights to generate text.
 """
 
 import numpy as np
@@ -45,17 +40,54 @@ class TextGenerator:
         self.unk_id = self.tokenizer.special_tokens["<UNK>"]
 
     def _softmax(self, logits: np.ndarray) -> np.ndarray:
-        """Softmax estable."""
+        """Apply numerically stable softmax.
+
+        Parameters
+        ----------
+        logits : np.ndarray
+            Logit vector for one decoding step.
+
+        Returns
+        -------
+        np.ndarray
+            Probability distribution over the vocabulary.
+        """
         shifted = logits - logits.max()
         exp_logits = np.exp(shifted)
         return exp_logits / exp_logits.sum()
 
     def _sample_greedy(self, logits: np.ndarray) -> int:
-        """Selecciona el token con probabilidad máxima."""
+        """Select the most likely next token.
+
+        Parameters
+        ----------
+        logits : np.ndarray
+            Logit vector for one decoding step.
+
+        Returns
+        -------
+        int
+            Token ID with maximum logit value.
+        """
         return int(np.argmax(logits))
 
     def _sample_topk(self, logits: np.ndarray, k: int = 10, temperature: float = 1.0) -> int:
-        """Muestrea entre los K tokens más probables."""
+        """Sample from the top-k most probable tokens.
+
+        Parameters
+        ----------
+        logits : np.ndarray
+            Logit vector for one decoding step.
+        k : int, optional
+            Number of top candidates considered for sampling.
+        temperature : float, optional
+            Temperature scaling factor for logits.
+
+        Returns
+        -------
+        int
+            Sampled token ID.
+        """
         logits = logits / temperature
         probs = self._softmax(logits)
 
@@ -66,7 +98,22 @@ class TextGenerator:
         return int(np.random.choice(top_k_idx, p=top_k_probs))
 
     def _sample_topp(self, logits: np.ndarray, p: float = 0.9, temperature: float = 1.0) -> int:
-        """Nucleus sampling: muestrea hasta acumular probabilidad p."""
+        """Sample from a nucleus whose cumulative probability reaches ``p``.
+
+        Parameters
+        ----------
+        logits : np.ndarray
+            Logit vector for one decoding step.
+        p : float, optional
+            Cumulative probability threshold.
+        temperature : float, optional
+            Temperature scaling factor for logits.
+
+        Returns
+        -------
+        int
+            Sampled token ID.
+        """
         logits = logits / temperature
         probs = self._softmax(logits)
 

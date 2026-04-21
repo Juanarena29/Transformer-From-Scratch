@@ -1,6 +1,7 @@
-"""
-Tokenizador BPE entrenado desde cero en Python puro para español.
-Componente de preprocesamiento del mini transformer — cubre entrenamiento, encoding y decoding.
+"""tokenizer.py
+Byte-Pair Encoding tokenizer implementation for Spanish text.
+Architecture position: converts raw text to token IDs before embedding and
+converts generated token IDs back to readable text after inference.
 """
 import json
 import re
