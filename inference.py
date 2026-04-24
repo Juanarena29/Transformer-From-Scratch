@@ -203,7 +203,7 @@ if __name__ == "__main__":
     cfg = TransformerConfig()
 
     # Cargar último checkpoint
-    model_path = "checkpoints/epoch_1_final.npz"  # Cambiar según tu checkpoint
+    model_path = "checkpoints/epoch_6_final.npz"  # Cambiar según tu checkpoint
     tokenizer_path = "Tokenizer/vocab/tokenizer.json"
 
     generator = TextGenerator(model_path, tokenizer_path, cfg)

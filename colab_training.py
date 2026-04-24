@@ -53,8 +53,8 @@ LR = TransformerConfig.lr
 EVAL_EVERY = 50  # solo aplica si hay suficientes batches por época
 SAVE_EVERY = 250
 RESUME_FROM_CHECKPOINT = True
-RESUME_PATH = None  # e.g. "checkpoints/epoch_3_final.npz"
-DATASET_SHUFFLE_SEED = 42  # None => seed aleatorio en cada rerun
+RESUME_PATH = None   # e.g. "checkpoints/epoch_3_final.npz"
+DATASET_SHUFFLE_SEED = None  # None => seed aleatorio en cada rerun
 
 # Wikipedia larga genera MUCHISIMOS chunks. Para demos/Colab, conviene topar.
 # Si pones None, no se submuestrea (puede volverse muy lento en NumPy).
@@ -67,9 +67,6 @@ print(f"[CONFIG] max_train_chunks={MAX_TRAIN_CHUNKS} | max_val_chunks={MAX_VAL_C
 if DATASET_SHUFFLE_SEED is None:
     DATASET_SHUFFLE_SEED = int(np.random.default_rng().integers(0, 2**31 - 1))
 print(f"[CONFIG] dataset_shuffle_seed={DATASET_SHUFFLE_SEED}")
-# Resume training
-RESUME_FROM_CHECKPOINT = True
-RESUME_PATH = None  # e.g. "checkpoints/epoch_3_final.npz"
 
 
 # ── Crear carpetas ───────────────────────────────────────────────────────────
@@ -381,8 +378,9 @@ init_logger()
 global_batch = 0
 
 for epoch in range(start_epoch, start_epoch + EPOCHS):
+    end_epoch = start_epoch + EPOCHS - 1
     print(f"\n{'='*60}")
-    print(f"EPOCH {epoch}/{EPOCHS}")
+    print(f"EPOCH {epoch}/{end_epoch}")
     print(f"{'='*60}")
 
     epoch_losses = []

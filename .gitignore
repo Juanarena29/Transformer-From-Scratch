@@ -29,6 +29,5 @@ Thumbs.db
 .env
 .env.*
 
-# Project artifacts
-checkpoints/*.npz
-embedding_visualization*.html
+
+
